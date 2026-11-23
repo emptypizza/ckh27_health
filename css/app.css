@@ -1,0 +1,463 @@
+/* 색상 토큰, 기본 규칙, 버튼은 fortune-report의 globals.css에서, 카드와 폼은 HealthPanel.module.css에서 옮겼다. */
+
+:root {
+  --blue: #285de5;
+  --blue-dark: #1948bf;
+  --ink: #19243b;
+  --subtle: #52617b;
+  --line: #e7ebf2;
+  --radius: 15px;
+  color-scheme: light;
+  font-family: Inter, Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  font-synthesis: none;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  color: var(--ink);
+  font-size: 14px;
+  background: #fafbfe;
+  line-height: 1.65;
+  letter-spacing: -0.025em;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  -webkit-tap-highlight-color: transparent;
+}
+
+button {
+  cursor: pointer;
+  border: 0;
+  background: none;
+  color: inherit;
+}
+
+button:disabled {
+  cursor: default;
+  opacity: 0.5;
+}
+
+p,
+h1,
+h2 {
+  margin: 0;
+}
+
+h1,
+h2 {
+  font-weight: 700;
+  line-height: 1.45;
+  word-break: keep-all;
+}
+
+p,
+dd {
+  word-break: keep-all;
+  overflow-wrap: anywhere;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: 3px solid #8cafff;
+  outline-offset: 4px;
+}
+
+/* 화면이 바뀔 때 제목으로 초점을 옮기지만, 누를 수 있는 요소가 아니므로 테두리는 그리지 않는다. */
+[tabindex="-1"]:focus {
+  outline: 0;
+}
+
+svg {
+  flex-shrink: 0;
+}
+
+::selection {
+  background: #d9e5ff;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+.page {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 34px 20px 44px;
+}
+
+.page-header {
+  margin-bottom: 22px;
+}
+
+.page-header h1 {
+  font-size: 29px;
+  font-weight: 750;
+  letter-spacing: -1.35px;
+  margin-bottom: 6px;
+}
+
+.page-header p,
+.page-footer {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.page-footer {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.button {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  border-radius: 7px;
+  font-size: 12px;
+  line-height: 1.45;
+  font-weight: 600;
+  padding: 11px 15px;
+  white-space: nowrap;
+  min-height: 38px;
+  transition: background 0.15s;
+}
+
+.button-primary {
+  background: var(--blue);
+  color: #fff;
+  border: 1px solid var(--blue);
+  box-shadow: 0 3px 7px #285de516;
+}
+
+.button-primary:hover {
+  background: var(--blue-dark);
+}
+
+.button-secondary {
+  background: white;
+  color: #57657b;
+  border: 1px solid #dfe5ee;
+}
+
+.button-secondary:hover {
+  background: #f5f8ff;
+  border-color: #bdccef;
+}
+
+.health {
+  display: grid;
+  gap: 16px;
+}
+
+/* 알림 문단이 감싸는 요소 없이 바로 카드 사이에 놓이도록 한다. */
+.feedback {
+  display: contents;
+}
+
+.card {
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: white;
+  min-width: 0;
+}
+
+.card h2 {
+  font-size: 19px;
+}
+
+.locked {
+  width: 100%;
+  max-width: 540px;
+  margin: 0 auto;
+  gap: 14px;
+}
+
+.lock-icon {
+  width: 47px;
+  height: 47px;
+  display: grid;
+  place-items: center;
+  color: var(--blue);
+  border-radius: 12px;
+  background: #eef4ff;
+}
+
+.lock-form,
+.control {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.lock-form {
+  gap: 12px;
+}
+
+.control {
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.control input,
+.control select,
+.control textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid #ccd5e5;
+  border-radius: 8px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 400;
+  padding: 8px 10px;
+}
+
+.control textarea {
+  resize: vertical;
+}
+
+.eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #315b9e;
+  font-size: 12px;
+  font-weight: 700;
+  margin-bottom: 5px;
+}
+
+.muted {
+  color: var(--subtle);
+  font-size: 13px;
+}
+
+.overview {
+  border-color: #dbe7fb;
+  background: linear-gradient(130deg, #eef4ff, #fff 65%);
+}
+
+.section-head,
+.backups {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.metrics,
+.trend {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.metrics > div,
+.trend > div {
+  min-width: 0;
+  padding: 13px;
+  border-radius: 10px;
+  border: 1px solid #e2e9f5;
+  background: #fff;
+}
+
+.metrics dt {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.metrics dt,
+.trend dt,
+.metrics small {
+  color: var(--subtle);
+  font-size: 12px;
+}
+
+.metrics dd,
+.trend dd {
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  font-size: 19px;
+  margin: 4px 0 0;
+}
+
+.metrics small {
+  display: block;
+  font-weight: 400;
+}
+
+.trend dd {
+  font-size: 16px;
+}
+
+.actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.actions button,
+.actions label,
+.lock-form button {
+  min-height: 42px;
+}
+
+.fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.fieldset legend {
+  font-weight: 750;
+  margin: 0 0 8px;
+  padding: 0;
+}
+
+.fields,
+.text-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 11px;
+}
+
+.text-fields {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 12px;
+}
+
+.history {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.history li {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--line);
+}
+
+.history li span {
+  color: var(--subtle);
+  overflow-wrap: anywhere;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+}
+
+.history-date {
+  padding: 0;
+  color: var(--blue-dark);
+  font-weight: 650;
+  text-align: left;
+}
+
+.summary {
+  line-height: 1.7;
+}
+
+.error,
+.notice {
+  border-radius: 8px;
+  padding: 10px 13px;
+  background: #fff1ef;
+  color: #8e332c;
+  font-size: 13px;
+}
+
+.notice {
+  background: #edf6ff;
+  color: #254c86;
+}
+
+.file-button {
+  position: relative;
+  cursor: pointer;
+}
+
+.file-button:has(input:disabled) {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.file-button input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  opacity: 0;
+  cursor: inherit;
+}
+
+.file-button:focus-within {
+  outline: 3px solid #8cafff;
+  outline-offset: 3px;
+}
+
+/* 글자가 16px보다 작으면 iOS Safari가 입력칸을 누를 때 화면을 확대한다. */
+@media (pointer: coarse) {
+  .control input,
+  .control select,
+  .control textarea {
+    font-size: 16px;
+  }
+}
+
+@media (max-width: 740px) {
+  .metrics,
+  .trend,
+  .fields {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 480px) {
+  .page {
+    padding: 22px 14px 32px;
+  }
+
+  .page-header h1 {
+    font-size: 24px;
+    letter-spacing: -1px;
+  }
+
+  .card {
+    padding: 15px;
+  }
+
+  .text-fields,
+  .history li {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .metrics > div,
+  .trend > div {
+    padding: 9px;
+  }
+}

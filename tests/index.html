@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; base-uri 'none'; form-action 'none'">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <title>건강 관리 테스트</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="../css/app.css">
+  <script type="module" src="health.test.js"></script>
+  <script type="module" src="health-vault.test.js"></script>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>건강 관리 테스트</h1>
+      <p>기록 검증, 진료 요약, 암호화 동작을 이 브라우저에서 확인합니다.</p>
+    </header>
+    <main class="health">
+      <section class="card">
+        <p id="test-summary" role="status">테스트를 실행하는 중입니다.</p>
+        <div id="test-results" class="health"></div>
+      </section>
+    </main>
+    <noscript><p class="error">테스트는 자바스크립트를 켜야 실행됩니다.</p></noscript>
+  </div>
+</body>
+</html>
