@@ -14,6 +14,7 @@ import { icon } from "./icons.js";
 
 const STORAGE_KEY = "ckh27_health:vault:v1";
 const MAX_BACKUP_BYTES = 2_500_000;
+const MIN_PASSPHRASE = 6; // 새 암호를 만들 때만 확인한다. 기존 기록과 백업은 길이와 상관없이 연다.
 // 브라우저는 https와 localhost에서만 암호화 기능(Web Crypto)을 준다.
 const NO_CRYPTO = "이 주소에서는 기록을 암호화할 수 없습니다. https 주소나 localhost로 열어 주세요.";
 
@@ -295,7 +296,7 @@ function unlock() {
       if (restored) state.notice = "암호화 백업을 복원했습니다.";
       return;
     }
-    if (state.passphrase.length < 12) throw new Error("건강 기록 암호를 12자 이상 입력해 주세요.");
+    if (state.passphrase.length < MIN_PASSPHRASE) throw new Error(`건강 기록 암호를 ${MIN_PASSPHRASE}자 이상 입력해 주세요.`);
     if (state.passphrase !== state.confirmation) throw new Error("두 암호가 서로 다릅니다.");
     const records = emptyHealthDocument();
     const created = await createHealthVault(records, state.passphrase);
@@ -409,13 +410,13 @@ function lockForm(existing) {
   const { restore } = state;
   const passphrase = element("input", {
     id: "vault-passphrase", type: "password", autocomplete: existing ? "current-password" : "new-password",
-    minlength: existing ? undefined : 12, maxlength: 256, required: true,
+    minlength: existing ? undefined : MIN_PASSPHRASE, maxlength: 256, required: true,
   });
   passphrase.value = state.passphrase;
   passphrase.addEventListener("input", () => { state.passphrase = passphrase.value; });
 
   const confirmation = existing ? null : element("input", {
-    id: "vault-confirmation", type: "password", autocomplete: "new-password", minlength: 12, maxlength: 256, required: true,
+    id: "vault-confirmation", type: "password", autocomplete: "new-password", minlength: MIN_PASSPHRASE, maxlength: 256, required: true,
   });
   if (confirmation) {
     confirmation.value = state.confirmation;
