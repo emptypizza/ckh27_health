@@ -15,7 +15,7 @@ Apple 건강에서 내보낸 파일을 차트로 살펴보고 증상, 수면, �
 
 ### 배포 기록의 열람 암호 변경
 
-첫 화면이나 배포 기록 대시보드에서 **열람 암호 변경**을 누릅니다. 저장소 관리자는 현재 열람 암호와 새 암호를 입력해 모든 기기가 사용하는 배포 기록을 다시 암호화할 수 있습니다. 새 암호는 12자 이상입니다. [암호 변경 화면](https://emptypizza.github.io/ckh27_health/password.html)
+첫 화면이나 배포 기록 대시보드에서 **열람 암호 변경**을 누릅니다. 저장소 관리자는 현재 열람 암호와 새 암호를 입력해 모든 기기가 사용하는 배포 기록을 다시 암호화할 수 있습니다. 새 암호는 4자 이상 12자 이하로 입력합니다. [암호 변경 화면](https://emptypizza.github.io/ckh27_health/password.html)
 
 변경 화면에서 GitHub의 fine-grained personal access token을 발급할 수 있습니다. 저장소 선택에서 **Only select repositories → ckh27_health**를 지정하고 **Contents → Read and write**를 선택합니다. 토큰은 해당 파일에 대한 GitHub API 요청에만 사용합니다. 현재 암호와 새 암호는 기기에서 처리하고, GitHub에는 새 암호문을 전송합니다. [GitHub 토큰 발급 안내](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
 

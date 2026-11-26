@@ -5,6 +5,8 @@ const maxSourceBytes = HEALTH_VAULT_FILE_BYTES + 256;
 const shaPattern = /^[0-9a-f]{40}$/;
 const encoder = new TextEncoder();
 const decoder = new TextDecoder("utf-8", { fatal: true });
+// HTML pattern and this Unicode regex both count code points, including emoji.
+export const NEW_PASSPHRASE_PATTERN = /^[\s\S]{4,12}$/u;
 
 class RotationError extends Error {
   constructor(code, message) {
@@ -88,8 +90,8 @@ export async function preparePublishedRotation({ token, currentPassphrase, newPa
   if (typeof currentPassphrase !== "string" || !currentPassphrase.length || currentPassphrase.length > 1024) {
     throw failure("current", "현재 열람 암호를 확인해 주세요.");
   }
-  if (typeof newPassphrase !== "string" || Array.from(newPassphrase).length < 12 || encoder.encode(newPassphrase).length > 1024) {
-    throw failure("invalid", "새 열람 암호는 12자 이상, UTF-8 기준 1,024바이트 이하로 입력해 주세요.");
+  if (typeof newPassphrase !== "string" || !NEW_PASSPHRASE_PATTERN.test(newPassphrase)) {
+    throw failure("invalid", "새 열람 암호는 4자 이상 12자 이하로 입력해 주세요.");
   }
   if (newPassphrase === currentPassphrase) throw failure("invalid", "현재 암호와 다른 새 열람 암호를 입력해 주세요.");
   const { bytes, sha } = await currentFile(token, fetcher);

@@ -5,7 +5,7 @@ import { preparePublishedRotation, commitPublishedRotation, gitBlobSha, readPubl
 
 const token = "github_pat_synthetic_rotation_fixture";
 const currentPassphrase = "  테스트 전용 이전 암호  ";
-const newPassphrase = "  새 암호 검증용 테스트  ";
+const newPassphrase = "  새 암호 😀😀😀  "; // 12 code points, including the surrounding spaces.
 const endpoint = "https://api.github.com/repos/emptypizza/ckh27_health/contents/js/published-vault.js";
 const commitId = "8".repeat(40);
 
@@ -71,9 +71,11 @@ test("현재 암호, 새 암호 길이와 실제 파일을 확인한 뒤 전체 
   const { source, document, prepared, envelope } = await getFixture();
   const repo = fakeRepository(source);
   const settings = { token, currentPassphrase, newPassphrase };
-  await assert.rejects(preparePublishedRotation({ ...settings, newPassphrase: "😀".repeat(6) }, repo.fetch), /12자/);
-  await assert.rejects(preparePublishedRotation({ ...settings, newPassphrase: "한".repeat(400) }, repo.fetch), /1,024/);
-  await assert.rejects(preparePublishedRotation({ ...settings, newPassphrase: currentPassphrase }, repo.fetch), /다른/);
+  for (const invalid of ["😀".repeat(3), "한".repeat(13)]) {
+    await assert.rejects(preparePublishedRotation({ ...settings, newPassphrase: invalid }, repo.fetch), /4자 이상 12자 이하/);
+  }
+  await assert.rejects(preparePublishedRotation({ ...settings, currentPassphrase: newPassphrase }, repo.fetch), /다른/);
+  assert.equal(repo.calls.length, 0);
   await assert.rejects(preparePublishedRotation({ ...settings, currentPassphrase: currentPassphrase.trim() }, repo.fetch), /현재 열람 암호/);
   assert.equal(repo.writes, 0);
   const rotated = readPublishedEnvelope(atob(prepared.content));
@@ -101,6 +103,14 @@ test("현재 암호, 새 암호 길이와 실제 파일을 확인한 뒤 전체 
       }
     }
   }
+});
+
+test("4자 암호로 바꾼 기록을 다시 열 수 있다", async () => {
+  const { source, document } = await getFixture();
+  const newPassphrase = "가A😀1";
+  const prepared = await preparePublishedRotation({ token, currentPassphrase, newPassphrase }, fakeRepository(source).fetch);
+  const rotated = readPublishedEnvelope(atob(prepared.content));
+  assert.deepEqual((await unlockHealthVault(rotated, newPassphrase)).document, document);
 });
 
 test("저장 중 응답이 끊겨도 동일 암호문을 확인하여 추가 커밋을 방지한다", async () => {

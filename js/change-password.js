@@ -1,5 +1,5 @@
 import { createDeviceLink } from "./device-link.js";
-import { commitPublishedRotation, gitBlobSha, preparePublishedRotation } from "./published-rotation.js";
+import { commitPublishedRotation, gitBlobSha, NEW_PASSPHRASE_PATTERN, preparePublishedRotation } from "./published-rotation.js";
 
 const byId = id => document.getElementById(id);
 const form = byId("rotation-form");
@@ -17,6 +17,11 @@ const status = byId("rotation-status");
 const check = byId("rotation-check");
 const output = byId("pairing-output");
 const retryDelays = [4, 8, 12, 20, 30, 30, 30, 30, 30, 30];
+
+for (const input of [next, confirmation]) {
+  input.pattern = NEW_PASSPHRASE_PATTERN.source;
+  input.title = byId("new-password-help").textContent;
+}
 
 let busy = false;
 let prepared = null; // An encrypted module and its base hash, safe to reuse after an interrupted write.
@@ -53,10 +58,6 @@ function clearCredentials() {
 
 function validate() {
   if (!prepared) {
-    if (Array.from(next.value).length < 12 || new TextEncoder().encode(next.value).length > 1024) {
-      setError("새 암호를 12자 이상, UTF-8 기준 1,024바이트 이하로 입력해 주세요.", next);
-      return false;
-    }
     if (next.value === current.value) {
       setError("현재 암호와 다른 새 암호를 입력해 주세요.", next);
       return false;
