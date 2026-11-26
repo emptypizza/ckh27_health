@@ -92,7 +92,6 @@ let fillForm = () => {}; // 지금 보이는 폼의 입력칸을 state 값으로
 let shown = { error: "", notice: "" };
 let shownView = null;
 let focusAfterAction = null;
-let publishedLoadAttempt = 0;
 let publishedEpoch = 0;
 const PUBLISHED_PASSWORD_ERROR = "열람 암호를 확인하고 다시 입력해 주세요.";
 const PUBLISHED_PIN_ERROR = "열람 PIN을 확인하고 6자리 숫자를 다시 입력해 주세요.";
@@ -513,12 +512,10 @@ async function openPublished(input, token) {
       }
       let envelope;
       try {
-        // A new URL after a failed download also retries browsers' cached module failures.
-        const module = publishedLoadAttempt === 0 ? await import("./published-vault.js")
-          : await import(`./published-vault.js?retry=${publishedLoadAttempt}`);
+        // An already-open tab must use the current Pages revision after a password change.
+        const module = await import(`./published-vault.js?open=${Date.now()}`);
         envelope = module.default;
       } catch {
-        publishedLoadAttempt++;
         if (epoch === publishedEpoch) state.publishedError = "배포 기록을 내려받지 못했습니다. 연결을 확인한 뒤 다시 열어 주세요.";
         return;
       }
@@ -590,7 +587,8 @@ function publishedForm() {
           ? "6자리 PIN을 입력해 Apple 건강 기록을 여세요."
           : "열람 암호를 입력하면 이 페이지에 보관된 Apple 건강 기록이 열립니다."))),
     element("form", { class: "published-form", submit: event => { event.preventDefault(); openPublished(input, pin ? deviceLink : null); } },
-      control(pin ? "열람 PIN" : "열람 암호", input), submit, error, toggle),
+      control(pin ? "열람 PIN" : "열람 암호", input), submit, error, toggle,
+      element("a", { href: "password.html", class: "password-settings" }, "열람 암호 변경")),
   );
 }
 
@@ -599,7 +597,9 @@ function publishedView() {
     element("div", { class: "preview-toolbar" },
       element("p", { class: "muted" }, state.publishedLinkUnsaved
         ? "이 브라우저에 기기 연결을 저장할 수 없습니다. 다음에도 같은 연결 링크를 사용하세요." : "배포 기록 열람 중"),
-      button("published-lock", "secondary", [icon("lock-keyhole", 16), "배포 기록 잠그기"], clearSession)),
+      element("div", { class: "actions" },
+        element("a", { href: "password.html", class: "password-settings" }, "열람 암호 변경"),
+        button("published-lock", "secondary", [icon("lock-keyhole", 16), "배포 기록 잠그기"], clearSession))),
     renderAppleHealth(state.publishedApple),
   );
 }

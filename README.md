@@ -13,6 +13,14 @@ Apple 건강에서 내보낸 파일을 차트로 살펴보고 증상, 수면, �
 
 기존의 긴 열람 암호도 사용할 수 있습니다. 등록한 기기에서는 **열람 암호로 열기**를 선택하세요. 배포 기록은 읽기 전용이며 **배포 기록 잠그기**를 누르거나 페이지를 새로고침하면 다시 잠깁니다.
 
+### 배포 기록의 열람 암호 변경
+
+첫 화면이나 배포 기록 대시보드에서 **열람 암호 변경**을 누릅니다. 저장소 관리자는 현재 열람 암호와 새 암호를 입력해 모든 기기가 사용하는 배포 기록을 다시 암호화할 수 있습니다. 새 암호는 12자 이상입니다. [암호 변경 화면](https://emptypizza.github.io/ckh27_health/password.html)
+
+변경 화면에서 GitHub의 fine-grained personal access token을 발급할 수 있습니다. 저장소 선택에서 **Only select repositories → ckh27_health**를 지정하고 **Contents → Read and write**를 선택합니다. 토큰은 해당 파일에 대한 GitHub API 요청에만 사용합니다. 현재 암호와 새 암호는 기기에서 처리하고, GitHub에는 새 암호문을 전송합니다. [GitHub 토큰 발급 안내](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens)
+
+변경 화면에서 새 파일이 실제 사이트에 배포됐는지 확인할 수 있습니다. iPad에서 PIN을 계속 쓰려면 변경할 때 원하는 여섯 자리를 입력하고, 배포 후 표시되는 새 개인 링크를 iPad에서 한 번 여세요. 이미 내려받은 파일과 Git 이력에 남은 이전 버전은 그때의 암호로 열 수 있습니다.
+
 ## 내 기기의 ZIP 또는 XML 열기
 
 1. iPad **건강** 앱의 사이드바에서 **요약 → 프로필 → 모든 건강 데이터 내보내기 → 파일에 저장**을 선택합니다.

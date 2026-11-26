@@ -555,6 +555,16 @@ svg {
 .published-form #published-method { justify-self: start; padding: 6px 2px; color: #e1f1f1; background: transparent; border: 0; text-decoration: underline; text-underline-offset: 3px; }
 .published-form #published-method:hover { color: white; }
 .published-form input[inputmode="numeric"] { letter-spacing: .19em; }
+.password-settings {
+  display: inline-flex;
+  align-items: center;
+  justify-self: start;
+  min-height: 44px;
+  color: #245765;
+  font-size: .875rem;
+  text-underline-offset: 3px;
+}
+.published-form .password-settings { color: #e1f1f1; }
 .welcome-layout .apple-welcome {
   align-content: start;
   color: var(--ink);
