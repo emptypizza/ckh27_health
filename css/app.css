@@ -552,6 +552,9 @@ svg {
 .published-form .control input { min-height: 46px; font-size: 1rem; border-color: #c7dadd; }
 .published-form .button { min-height: 44px; color: #153e46; background: #c6eee1; border-color: #c6eee1; }
 .published-form .button:hover { background: #ddf9ef; }
+.published-form #published-method { justify-self: start; padding: 6px 2px; color: #e1f1f1; background: transparent; border: 0; text-decoration: underline; text-underline-offset: 3px; }
+.published-form #published-method:hover { color: white; }
+.published-form input[inputmode="numeric"] { letter-spacing: .19em; }
 .welcome-layout .apple-welcome {
   align-content: start;
   color: var(--ink);

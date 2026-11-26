@@ -13,6 +13,7 @@ import { createHealthVault, HEALTH_VAULT_FILE_BYTES, parseHealthVault, sealHealt
 import { readAppleHealth } from "./apple-import.js";
 import { renderAppleHealth } from "./apple-view.js";
 import { icon } from "./icons.js";
+import { openDeviceLink, readDeviceLink, rememberDeviceLink } from "./device-link.js";
 
 const STORAGE_KEY = "ckh27_health:vault:v1";
 const MIN_PASSPHRASE = 6; // 새 암호를 만들 때만 확인한다. 기존 기록과 백업은 길이와 상관없이 연다.
@@ -75,6 +76,8 @@ const state = {
   tab: "daily",
   publishedApple: null, // 배포 기록은 메모리에서만 열람한다.
   publishedError: "",
+  publishedUsePassword: false,
+  publishedLinkUnsaved: false,
   previewApple: null, // 잠긴 화면에서 파일을 열었을 때 메모리에만 보관
   savingPreview: false,
   period: 14,
@@ -92,6 +95,7 @@ let focusAfterAction = null;
 let publishedLoadAttempt = 0;
 let publishedEpoch = 0;
 const PUBLISHED_PASSWORD_ERROR = "열람 암호를 확인하고 다시 입력해 주세요.";
+const PUBLISHED_PIN_ERROR = "열람 PIN을 확인하고 6자리 숫자를 다시 입력해 주세요.";
 
 function element(tag, attributes = {}, ...children) {
   const node = document.createElement(tag);
@@ -346,6 +350,8 @@ function clearSession() {
   state.session = null;
   state.publishedApple = null;
   state.publishedError = "";
+  state.publishedUsePassword = false;
+  state.publishedLinkUnsaved = false;
   state.profile = emptyHealthDocument().profile;
   state.entry = emptyHealthEntry(state.today);
   state.passphrase = "";
@@ -484,7 +490,7 @@ function previewView() {
   );
 }
 
-async function openPublished(input) {
+async function openPublished(input, token) {
   if (running) return;
   const epoch = publishedEpoch;
   let passphrase = input.value;
@@ -495,6 +501,15 @@ async function openPublished(input) {
       if (!window.crypto?.subtle) {
         state.publishedError = NO_CRYPTO;
         return;
+      }
+      if (token) {
+        try {
+          passphrase = await openDeviceLink(token, passphrase);
+        } catch {
+          if (epoch === publishedEpoch) state.publishedError = PUBLISHED_PIN_ERROR;
+          return;
+        }
+        if (epoch !== publishedEpoch) return;
       }
       let envelope;
       try {
@@ -512,8 +527,11 @@ async function openPublished(input) {
       try {
         ({ document } = await unlockHealthVault(envelope, passphrase));
       } catch (error) {
-        if (epoch === publishedEpoch) state.publishedError = error instanceof Error && error.message.includes("암호가 맞는지")
-          ? PUBLISHED_PASSWORD_ERROR : "배포 기록 파일을 읽을 수 없습니다. 페이지를 새로고침해 주세요.";
+        if (epoch === publishedEpoch) {
+          const credentialError = token ? "이 연결로 기록을 열 수 없습니다. 열람 암호로 열어 주세요." : PUBLISHED_PASSWORD_ERROR;
+          state.publishedError = error instanceof Error && error.message.includes("암호가 맞는지")
+            ? credentialError : "배포 기록 파일을 읽을 수 없습니다. 페이지를 새로고침해 주세요.";
+        }
         return;
       }
       if (epoch !== publishedEpoch) return;
@@ -521,6 +539,8 @@ async function openPublished(input) {
         state.publishedError = "이 배포 기록에 Apple 건강 데이터가 없습니다.";
         return;
       }
+      // Remember only the PIN-wrapped token, and only after it opens the actual published record.
+      if (token) state.publishedLinkUnsaved = !rememberDeviceLink(token);
       state.publishedApple = document.appleHealth;
       state.passphrase = "";
       state.confirmation = "";
@@ -532,9 +552,14 @@ async function openPublished(input) {
 }
 
 function publishedForm() {
+  const deviceLink = readDeviceLink();
+  const pin = Boolean(deviceLink) && !state.publishedUsePassword;
   const input = element("input", {
-    id: "published-passphrase", type: "password", autocomplete: "off", maxlength: 1024, required: true,
-    "aria-describedby": "published-error", "aria-invalid": String(state.publishedError === PUBLISHED_PASSWORD_ERROR),
+    id: "published-passphrase", type: "password", autocomplete: "off", required: true, enterkeyhint: "go",
+    inputmode: pin ? "numeric" : undefined, minlength: pin ? 6 : undefined, maxlength: pin ? 6 : 1024,
+    pattern: pin ? "[0-9]{6}" : undefined,
+    "aria-describedby": "published-intro-text published-error",
+    "aria-invalid": String(state.publishedError === (pin ? PUBLISHED_PIN_ERROR : PUBLISHED_PASSWORD_ERROR)),
   });
   const submit = element("button", { id: "published-submit", type: "submit", class: "button button-primary" });
   const error = element("p", { id: "published-error", class: "error", role: "alert" }, state.publishedError);
@@ -550,20 +575,30 @@ function publishedForm() {
     submit.textContent = state.busy && focusAfterAction?.startsWith("published-") ? "기록 여는 중…" : "배포 기록 열기";
     error.hidden = !state.publishedError;
   });
+  const toggle = deviceLink && button("published-method", "secondary", pin ? "열람 암호로 열기" : "열람 PIN으로 열기", () => {
+    input.value = "";
+    state.publishedUsePassword = pin;
+    state.publishedError = "";
+    render();
+    document.getElementById("published-passphrase")?.focus();
+  });
   return element("section", { class: "card published-welcome", "aria-labelledby": "published-title" },
     element("div", { class: "published-intro" },
       element("span", { class: "welcome-icon" }, icon("heart-pulse", 28)),
       element("div", {}, element("h2", { id: "published-title" }, "배포 기록 열기"),
-        element("p", {}, "열람 암호를 입력하면 이 페이지에 보관된 Apple 건강 기록이 열립니다."))),
-    element("form", { class: "published-form", submit: event => { event.preventDefault(); openPublished(input); } },
-      control("열람 암호", input), submit, error),
+        element("p", { id: "published-intro-text" }, pin
+          ? "6자리 PIN을 입력해 Apple 건강 기록을 여세요."
+          : "열람 암호를 입력하면 이 페이지에 보관된 Apple 건강 기록이 열립니다."))),
+    element("form", { class: "published-form", submit: event => { event.preventDefault(); openPublished(input, pin ? deviceLink : null); } },
+      control(pin ? "열람 PIN" : "열람 암호", input), submit, error, toggle),
   );
 }
 
 function publishedView() {
   return element("section", { class: "health", "aria-label": "배포 건강 기록" },
     element("div", { class: "preview-toolbar" },
-      element("p", { class: "muted" }, "배포 기록 열람 중"),
+      element("p", { class: "muted" }, state.publishedLinkUnsaved
+        ? "이 브라우저에 기기 연결을 저장할 수 없습니다. 다음에도 같은 연결 링크를 사용하세요." : "배포 기록 열람 중"),
       button("published-lock", "secondary", [icon("lock-keyhole", 16), "배포 기록 잠그기"], clearSession)),
     renderAppleHealth(state.publishedApple),
   );
@@ -990,6 +1025,15 @@ try {
   state.error = "브라우저 저장소를 읽을 수 없습니다. 브라우저 저장 설정을 확인해 주세요.";
 }
 if (!window.crypto?.subtle) state.error = NO_CRYPTO;
+
+window.addEventListener("hashchange", () => {
+  if (state.session || state.previewApple) return;
+  publishedEpoch++;
+  state.publishedUsePassword = false;
+  state.publishedError = "";
+  if (state.publishedApple) clearSession();
+  else render();
+});
 
 window.addEventListener("pagehide", () => {
   publishedEpoch++;
