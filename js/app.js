@@ -73,6 +73,8 @@ const state = {
   notice: "",
   error: "",
   tab: "daily",
+  publishedApple: null, // 배포 기록은 메모리에서만 열람한다.
+  publishedError: "",
   previewApple: null, // 잠긴 화면에서 파일을 열었을 때 메모리에만 보관
   savingPreview: false,
   period: 14,
@@ -87,6 +89,9 @@ let fillForm = () => {}; // 지금 보이는 폼의 입력칸을 state 값으로
 let shown = { error: "", notice: "" };
 let shownView = null;
 let focusAfterAction = null;
+let publishedLoadAttempt = 0;
+let publishedEpoch = 0;
+const PUBLISHED_PASSWORD_ERROR = "열람 암호를 확인하고 다시 입력해 주세요.";
 
 function element(tag, attributes = {}, ...children) {
   const node = document.createElement(tag);
@@ -213,11 +218,12 @@ function render() {
   const focusId = active?.id || focusAfterAction;
   const selection = active && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
   const previewing = state.previewApple && !state.savingPreview && !state.session;
-  const view = state.session ? "open" : previewing ? "preview" : "locked";
+  const view = state.publishedApple ? "published" : state.session ? "open" : previewing ? "preview" : "locked";
 
   updaters = [];
   fillForm = () => {};
-  root.replaceChildren(state.session ? openView() : previewing ? previewView() : lockedView());
+  const screens = { published: publishedView, open: openView, preview: previewView, locked: lockedView };
+  root.replaceChildren(screens[view]());
   fillForm();
   refresh();
 
@@ -227,7 +233,8 @@ function render() {
     if (selection) target.setSelectionRange(...selection);
   } else if (shownView !== null && shownView !== view) {
     // 잠금 화면과 기록 화면이 바뀌면 초점 있던 요소가 사라지므로 새 화면의 제목으로 옮긴다.
-    const focusTarget = view === "open" ? "health-overview-title" : view === "preview" ? "preview-save" : "health-vault-title";
+    const focusTarget = { published: "published-lock", open: "health-overview-title", preview: "preview-save",
+      locked: shownView === "published" ? "published-passphrase" : "health-vault-title" }[view];
     document.getElementById(focusTarget)?.focus({ preventScroll: true });
   }
   shownView = view;
@@ -327,6 +334,7 @@ function unlock() {
 }
 
 function clearSession() {
+  publishedEpoch++;
   try {
     snapshot = window.localStorage.getItem(STORAGE_KEY);
     state.hasVault = snapshot !== null;
@@ -336,6 +344,8 @@ function clearSession() {
     state.error = "브라우저 저장소를 읽을 수 없습니다.";
   }
   state.session = null;
+  state.publishedApple = null;
+  state.publishedError = "";
   state.profile = emptyHealthDocument().profile;
   state.entry = emptyHealthEntry(state.today);
   state.passphrase = "";
@@ -474,6 +484,91 @@ function previewView() {
   );
 }
 
+async function openPublished(input) {
+  if (running) return;
+  const epoch = publishedEpoch;
+  let passphrase = input.value;
+  input.value = "";
+  state.publishedError = "";
+  await action(async () => {
+    try {
+      if (!window.crypto?.subtle) {
+        state.publishedError = NO_CRYPTO;
+        return;
+      }
+      let envelope;
+      try {
+        // A new URL after a failed download also retries browsers' cached module failures.
+        const module = publishedLoadAttempt === 0 ? await import("./published-vault.js")
+          : await import(`./published-vault.js?retry=${publishedLoadAttempt}`);
+        envelope = module.default;
+      } catch {
+        publishedLoadAttempt++;
+        if (epoch === publishedEpoch) state.publishedError = "배포 기록을 내려받지 못했습니다. 연결을 확인한 뒤 다시 열어 주세요.";
+        return;
+      }
+      if (epoch !== publishedEpoch) return;
+      let document;
+      try {
+        ({ document } = await unlockHealthVault(envelope, passphrase));
+      } catch (error) {
+        if (epoch === publishedEpoch) state.publishedError = error instanceof Error && error.message.includes("암호가 맞는지")
+          ? PUBLISHED_PASSWORD_ERROR : "배포 기록 파일을 읽을 수 없습니다. 페이지를 새로고침해 주세요.";
+        return;
+      }
+      if (epoch !== publishedEpoch) return;
+      if (!document.appleHealth) {
+        state.publishedError = "이 배포 기록에 Apple 건강 데이터가 없습니다.";
+        return;
+      }
+      state.publishedApple = document.appleHealth;
+      state.passphrase = "";
+      state.confirmation = "";
+    } finally {
+      passphrase = "";
+      if (state.publishedError) focusAfterAction = "published-passphrase";
+    }
+  });
+}
+
+function publishedForm() {
+  const input = element("input", {
+    id: "published-passphrase", type: "password", autocomplete: "off", maxlength: 1024, required: true,
+    "aria-describedby": "published-error", "aria-invalid": String(state.publishedError === PUBLISHED_PASSWORD_ERROR),
+  });
+  const submit = element("button", { id: "published-submit", type: "submit", class: "button button-primary" });
+  const error = element("p", { id: "published-error", class: "error", role: "alert" }, state.publishedError);
+  input.addEventListener("input", () => {
+    state.publishedError = "";
+    error.textContent = "";
+    error.hidden = true;
+    input.setAttribute("aria-invalid", "false");
+  });
+  updaters.push(() => {
+    input.disabled = state.busy;
+    submit.disabled = state.busy;
+    submit.textContent = state.busy && focusAfterAction?.startsWith("published-") ? "기록 여는 중…" : "배포 기록 열기";
+    error.hidden = !state.publishedError;
+  });
+  return element("section", { class: "card published-welcome", "aria-labelledby": "published-title" },
+    element("div", { class: "published-intro" },
+      element("span", { class: "welcome-icon" }, icon("heart-pulse", 28)),
+      element("div", {}, element("h2", { id: "published-title" }, "배포 기록 열기"),
+        element("p", {}, "열람 암호를 입력하면 이 페이지에 보관된 Apple 건강 기록이 열립니다."))),
+    element("form", { class: "published-form", submit: event => { event.preventDefault(); openPublished(input); } },
+      control("열람 암호", input), submit, error),
+  );
+}
+
+function publishedView() {
+  return element("section", { class: "health", "aria-label": "배포 건강 기록" },
+    element("div", { class: "preview-toolbar" },
+      element("p", { class: "muted" }, "배포 기록 열람 중"),
+      button("published-lock", "secondary", [icon("lock-keyhole", 16), "배포 기록 잠그기"], clearSession)),
+    renderAppleHealth(state.publishedApple),
+  );
+}
+
 function lockForm(existing) {
   const { restore } = state;
   const passphrase = element("input", {
@@ -557,6 +652,7 @@ function lockedView() {
   );
   if (state.savingPreview) return vault;
   return element("div", { class: "welcome-layout" },
+    publishedForm(),
     element("section", { class: "card apple-welcome", "aria-labelledby": "apple-welcome-title" },
       element("span", { class: "welcome-icon" }, icon("heart-pulse", 32)),
       element("h2", { id: "apple-welcome-title" }, "Apple 건강 파일 열기"),
@@ -883,7 +979,7 @@ function refreshToday() {
   const today = seoulDate.format(new Date());
   if (today === state.today) return;
   state.today = today;
-  render();
+  if (!state.publishedApple) render();
 }
 
 try {
@@ -895,12 +991,19 @@ try {
 }
 if (!window.crypto?.subtle) state.error = NO_CRYPTO;
 
+window.addEventListener("pagehide", () => {
+  publishedEpoch++;
+  const input = document.getElementById("published-passphrase");
+  if (input) input.value = "";
+  if (state.publishedApple) clearSession();
+});
+
 window.addEventListener("storage", (event) => {
   if (event.storageArea !== storage || (event.key !== null && event.key !== STORAGE_KEY)) return;
   const external = event.newValue !== snapshot;
   if (external === state.external) return;
   state.external = external;
-  render();
+  if (!state.publishedApple) render();
 });
 // 자정이 지나면 오늘 날짜를 바꾼다. 백그라운드 탭은 타이머가 늦어지므로 화면으로 돌아올 때도 확인한다.
 window.setInterval(refreshToday, 60_000);
