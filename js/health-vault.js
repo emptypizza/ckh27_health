@@ -7,9 +7,9 @@ import { HEALTH_LIMITS, parseHealthDocument } from "./health.js";
 const SALT_BYTES = 16;
 const IV_BYTES = 12;
 const TAG_BYTES = 16;
-const PLAINTEXT_LIMIT = HEALTH_LIMITS.fileBytes;
+const PLAINTEXT_LIMIT = HEALTH_LIMITS.vaultBytes;
 const CIPHERTEXT_LIMIT = PLAINTEXT_LIMIT + TAG_BYTES;
-const ENVELOPE_LIMIT = 4 * Math.ceil(CIPHERTEXT_LIMIT / 3) + 256;
+export const HEALTH_VAULT_FILE_BYTES = 4 * Math.ceil(CIPHERTEXT_LIMIT / 3) + 256;
 const encoder = new TextEncoder();
 
 function encodeBase64(bytes) {
@@ -45,7 +45,7 @@ function decodeEnvelope(value) {
 }
 
 export function parseHealthVault(raw) {
-  if (raw.length > ENVELOPE_LIMIT) throw new Error("암호화된 건강 기록 파일이 너무 큽니다.");
+  if (raw.length > HEALTH_VAULT_FILE_BYTES) throw new Error("암호화된 건강 기록 파일이 너무 큽니다.");
   let value;
   try {
     value = JSON.parse(raw);
@@ -75,8 +75,7 @@ export async function sealHealthVault(document, key, salt) {
   decodeBase64(salt, SALT_BYTES);
   const raw = JSON.stringify(document);
   const plaintext = encoder.encode(raw);
-  if (plaintext.length > PLAINTEXT_LIMIT) throw new Error("건강 기록은 1MB 이하만 저장할 수 있습니다.");
-  parseHealthDocument(raw);
+  parseHealthDocument(raw, PLAINTEXT_LIMIT);
   const iv = crypto.getRandomValues(new Uint8Array(IV_BYTES));
   const ciphertext = await crypto.subtle.encrypt(cipherParameters(iv, salt), key, plaintext);
   return { version: 1, salt, iv: encodeBase64(iv), ciphertext: encodeBase64(new Uint8Array(ciphertext)) };
@@ -98,6 +97,6 @@ export async function unlockHealthVault(envelope, passphrase) {
   } catch {
     throw new Error("암호가 맞는지 확인해 주세요. 암호화된 파일이 손상되었을 수도 있습니다.");
   }
-  const document = parseHealthDocument(new TextDecoder("utf-8", { fatal: true }).decode(plaintext));
+  const document = parseHealthDocument(new TextDecoder("utf-8", { fatal: true }).decode(plaintext), PLAINTEXT_LIMIT);
   return { key, document };
 }

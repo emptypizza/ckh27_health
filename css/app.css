@@ -19,7 +19,7 @@
 body {
   margin: 0;
   color: var(--ink);
-  font-size: 14px;
+  font-size: 16px;
   background: #fafbfe;
   line-height: 1.65;
   letter-spacing: -0.025em;
@@ -90,20 +90,37 @@ svg {
 }
 
 .page {
-  max-width: 900px;
+  max-width: 1140px;
   margin: 0 auto;
   padding: 34px 20px 44px;
 }
 
 .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 18px;
   margin-bottom: 22px;
+  border-bottom: 1px solid #dde4ef;
+}
+
+.site-name {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.local-label {
+  color: #53657d;
+  font-size: .875rem;
 }
 
 .page-header h1 {
-  font-size: 29px;
+  font-size: 1.3rem;
   font-weight: 750;
   letter-spacing: -1.35px;
-  margin-bottom: 6px;
+  margin: 0;
 }
 
 .page-header p,
@@ -124,7 +141,7 @@ svg {
   align-items: center;
   gap: 8px;
   border-radius: 7px;
-  font-size: 12px;
+  font-size: .875rem;
   line-height: 1.45;
   font-weight: 600;
   padding: 11px 15px;
@@ -420,6 +437,60 @@ svg {
   outline-offset: 3px;
 }
 
+.welcome-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: clamp(16px, 2.5vw, 30px);
+  align-items: stretch;
+}
+
+.welcome-layout .locked {
+  max-width: none;
+  padding: clamp(20px, 3.3vw, 42px);
+}
+
+.apple-welcome {
+  padding: clamp(24px, 4vw, 52px);
+  align-content: center;
+  justify-items: start;
+  gap: 17px;
+  background: #193857;
+  color: #fff;
+  border-color: #193857;
+}
+
+.welcome-icon {
+  display: inline-flex;
+  padding: 12px;
+  border-radius: 16px;
+  color: #9fe5d5;
+  background: #284c65;
+}
+
+.apple-welcome h2 { font-size: clamp(1.5rem, 3vw, 2.15rem); }
+.apple-welcome > p { color: #e0ebf3; max-width: 31em; line-height: 1.75; }
+.apple-welcome .file-button { color: #14364d; border: 0; border-radius: 9px; padding: 13px 21px; }
+.export-help { width: 100%; color: #d4e6f3; font-size: .875rem; }
+.export-help summary { cursor: pointer; padding: 6px 0; }
+.export-help p { padding-top: 7px; }
+.welcome-layout .control, .welcome-layout .muted, .backups .muted { font-size: .875rem; }
+.vault-toolbar .section-head, .preview-toolbar { align-items: center; }
+.vault-toolbar h2 { display: flex; align-items: center; gap: 7px; font-size: .95rem; color: #465b73; }
+.preview-toolbar { display: flex; gap: 12px; justify-content: space-between; flex-wrap: wrap; }
+.preview-toolbar .muted { font-size: .875rem; }
+.health-tabs { padding: 5px; background: #eaf0f7; border-radius: 12px; justify-self: start; gap: 3px; }
+.health-tabs .button { border: 0; box-shadow: none; }
+.health-tabs .button-primary { background: white; color: #203d66; box-shadow: 0 1px 5px #22334b20; }
+.health-tabs .button-secondary { background: transparent; color: #495c73; }
+.health-tabs .button-secondary:hover { background: #f8fafd; }
+
+@media (max-width: 680px) {
+  .welcome-layout { grid-template-columns: minmax(0, 1fr); }
+  .health-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); justify-self: stretch; }
+  .health-tabs .button { padding-inline: 3px; gap: 4px; font-size: .8125rem; }
+  .health-tabs .button svg { display: none; }
+}
+
 /* 글자가 16px보다 작으면 iOS Safari가 입력칸을 누를 때 화면을 확대한다. */
 @media (pointer: coarse) {
   .control input,
@@ -443,7 +514,7 @@ svg {
   }
 
   .page-header h1 {
-    font-size: 24px;
+    font-size: 1.125rem;
     letter-spacing: -1px;
   }
 

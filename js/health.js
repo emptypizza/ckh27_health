@@ -1,9 +1,12 @@
 // 건강 기록 문서(v1)의 형식, 입력 검증, 진료 요약 생성.
-// fortune-report의 app/lib/health.ts에서 타입 표기만 뺀 것으로, 기록 형식은 원본과 같다.
+// 기존 v1 기록은 그대로 읽고, Apple 건강 원본 측정은 별도 필드에 보존한다.
+
+import { validateAppleHealth } from "./apple-model.js";
+export { mergeAppleHealth, validateAppleHealth } from "./apple-model.js";
 
 export const BLOOD_TYPES = ["", "A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-", "A", "B", "AB", "O"];
 
-export const HEALTH_LIMITS = { text: 6000, fileBytes: 1_000_000, entries: 3660 };
+export const HEALTH_LIMITS = { text: 6000, fileBytes: 1_000_000, vaultBytes: 3_000_000, entries: 3660 };
 
 export const HEALTH_RANGES = {
   heightCm: { min: 20, max: 300, step: 0.1 },
@@ -98,9 +101,9 @@ function checkedNumber(value, key, label) {
 }
 
 /** Validate imported JSON before accepting it. Optional values omitted in v1 stay blank. */
-export function parseHealthDocument(raw) {
-  if (new TextEncoder().encode(raw).length > HEALTH_LIMITS.fileBytes) {
-    throw new Error("건강 기록 파일은 1MB 이하만 가져올 수 있습니다.");
+export function parseHealthDocument(raw, byteLimit = HEALTH_LIMITS.fileBytes) {
+  if (new TextEncoder().encode(raw).length > byteLimit) {
+    throw new Error(`건강 기록 용량이 ${byteLimit / 1_000_000}MB를 넘습니다.`);
   }
   let parsed;
   try {
@@ -108,7 +111,7 @@ export function parseHealthDocument(raw) {
   } catch {
     throw new Error("올바른 JSON 건강 기록 파일이 아닙니다.");
   }
-  const source = checkedObject(parsed, ["version", "profile", "entries"], "건강 기록");
+  const source = checkedObject(parsed, ["version", "profile", "entries", "appleHealth"], "건강 기록");
   if (source.version !== 1) throw new Error("이 버전의 건강 기록 파일은 지원하지 않습니다.");
   const result = emptyHealthDocument();
   const profile = checkedObject(source.profile, ["birthDate", "bloodType", "heightCm", ...profileTextKeys], "건강 프로필");
@@ -138,6 +141,7 @@ export function parseHealthDocument(raw) {
     result.entries.push(entry);
   }
   result.entries.sort((first, second) => first.date < second.date ? -1 : 1);
+  if (source.appleHealth !== undefined) result.appleHealth = validateAppleHealth(source.appleHealth);
   return result;
 }
 

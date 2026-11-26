@@ -155,3 +155,10 @@ vite.config.ts.timestamp-*
 .nx/cache
 .nx/workspace-data
 .nx/migrate-runs
+
+# 기기에서만 사용하는 건강 내보내기 원본과 개인 리포트
+.DS_Store
+*.zip
+*.xml
+/apple_health_export/
+/개인용/

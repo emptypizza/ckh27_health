@@ -7,18 +7,20 @@
 
 import {
   BLOOD_TYPES, HEALTH_LIMITS, HEALTH_RANGES,
-  ageOn, buildVisitSummary, emptyHealthDocument, emptyHealthEntry, parseHealthDocument,
+  ageOn, buildVisitSummary, emptyHealthDocument, emptyHealthEntry, mergeAppleHealth, parseHealthDocument,
 } from "./health.js";
-import { createHealthVault, parseHealthVault, sealHealthVault, unlockHealthVault } from "./health-vault.js";
+import { createHealthVault, HEALTH_VAULT_FILE_BYTES, parseHealthVault, sealHealthVault, unlockHealthVault } from "./health-vault.js";
+import { readAppleHealth } from "./apple-import.js";
+import { renderAppleHealth } from "./apple-view.js";
 import { icon } from "./icons.js";
 
 const STORAGE_KEY = "ckh27_health:vault:v1";
-const MAX_BACKUP_BYTES = 2_500_000;
 const MIN_PASSPHRASE = 6; // 새 암호를 만들 때만 확인한다. 기존 기록과 백업은 길이와 상관없이 연다.
 // 브라우저는 https와 localhost에서만 암호화 기능(Web Crypto)을 준다.
 const NO_CRYPTO = "이 주소에서는 기록을 암호화할 수 없습니다. https 주소나 localhost로 열어 주세요.";
 
 const tabs = [
+  { id: "apple", label: "Apple 건강", icon: "heart-pulse" },
   { id: "daily", label: "일일 기록", icon: "activity" },
   { id: "profile", label: "기본정보", icon: "user-round" },
   { id: "visit", label: "진료 요약", icon: "clipboard-list" },
@@ -71,6 +73,8 @@ const state = {
   notice: "",
   error: "",
   tab: "daily",
+  previewApple: null, // 잠긴 화면에서 파일을 열었을 때 메모리에만 보관
+  savingPreview: false,
   period: 14,
 };
 state.entry = emptyHealthEntry(state.today);
@@ -106,8 +110,8 @@ function button(id, kind, content, click, disabled = () => state.busy) {
   return node;
 }
 
-function fileButton(id, label, accessibleName, disabled, pick) {
-  const input = element("input", { id, type: "file", accept: ".json,application/json", "aria-label": accessibleName });
+function fileButton(id, label, accessibleName, disabled, pick, accept = ".json,application/json") {
+  const input = element("input", { id, type: "file", accept, "aria-label": accessibleName });
   input.addEventListener("change", () => {
     const file = input.files?.[0];
     input.value = "";
@@ -175,7 +179,9 @@ function mergeRecords(records, imported) {
   const profile = Object.fromEntries(Object.entries(records.profile).map(([key, value]) => [
     key, value === "" || value === null ? imported.profile[key] : value,
   ]));
-  return { ...records, profile, entries: [...records.entries, ...imported.entries.filter((entry) => !recordedDates.has(entry.date))] };
+  const merged = { ...records, profile, entries: [...records.entries, ...imported.entries.filter((entry) => !recordedDates.has(entry.date))] };
+  if (imported.appleHealth) merged.appleHealth = mergeAppleHealth(records.appleHealth, imported.appleHealth);
+  return merged;
 }
 
 function savedEntry() {
@@ -206,11 +212,12 @@ function render() {
   // 작업 중에 버튼이 꺼지면 초점이 풀리므로, 그때는 작업을 시작할 때 초점이 있던 곳으로 돌아간다.
   const focusId = active?.id || focusAfterAction;
   const selection = active && typeof active.selectionStart === "number" ? [active.selectionStart, active.selectionEnd] : null;
-  const view = state.session ? "open" : "locked";
+  const previewing = state.previewApple && !state.savingPreview && !state.session;
+  const view = state.session ? "open" : previewing ? "preview" : "locked";
 
   updaters = [];
   fillForm = () => {};
-  root.replaceChildren(state.session ? openView() : lockedView());
+  root.replaceChildren(state.session ? openView() : previewing ? previewView() : lockedView());
   fillForm();
   refresh();
 
@@ -220,7 +227,8 @@ function render() {
     if (selection) target.setSelectionRange(...selection);
   } else if (shownView !== null && shownView !== view) {
     // 잠금 화면과 기록 화면이 바뀌면 초점 있던 요소가 사라지므로 새 화면의 제목으로 옮긴다.
-    document.getElementById(view === "open" ? "health-overview-title" : "health-vault-title").focus();
+    const focusTarget = view === "open" ? "health-overview-title" : view === "preview" ? "preview-save" : "health-vault-title";
+    document.getElementById(focusTarget)?.focus({ preventScroll: true });
   }
   shownView = view;
 }
@@ -272,7 +280,9 @@ function openSession(key, envelope, records) {
   state.passphrase = "";
   state.confirmation = "";
   state.restore = null;
-  state.tab = "daily";
+  state.tab = records.appleHealth || records.entries.length === 0 ? "apple" : "daily";
+  state.previewApple = null;
+  state.savingPreview = false;
 }
 
 function unlock() {
@@ -291,18 +301,28 @@ function unlock() {
         throw new Error("건강 기록 암호 또는 백업 파일을 확인해 주세요.");
       }
       const restored = state.restore !== null;
-      if (restored) await writeEnvelope(envelope);
-      openSession(unlocked.key, envelope, unlocked.document);
-      if (restored) state.notice = "암호화 백업을 복원했습니다.";
+      const pending = state.previewApple;
+      let records = unlocked.document;
+      if (pending) {
+        records = { ...records, appleHealth: mergeAppleHealth(records.appleHealth, pending) };
+        const sealed = await sealHealthVault(records, unlocked.key, envelope.salt);
+        await writeEnvelope(sealed);
+      } else if (restored) {
+        await writeEnvelope(envelope);
+      }
+      openSession(unlocked.key, envelope, records);
+      if (pending) state.notice = "Apple 건강 기록을 이 브라우저에 암호화해 보관했습니다.";
+      else if (restored) state.notice = "암호화 백업을 복원했습니다.";
       return;
     }
     if (state.passphrase.length < MIN_PASSPHRASE) throw new Error(`건강 기록 암호를 ${MIN_PASSPHRASE}자 이상 입력해 주세요.`);
     if (state.passphrase !== state.confirmation) throw new Error("두 암호가 서로 다릅니다.");
     const records = emptyHealthDocument();
+    if (state.previewApple) records.appleHealth = state.previewApple;
     const created = await createHealthVault(records, state.passphrase);
     await writeEnvelope(created.envelope);
     openSession(created.key, created.envelope, records);
-    state.notice = "이 브라우저에 건강 기록을 만들었습니다.";
+    state.notice = records.appleHealth ? "Apple 건강 기록을 이 브라우저에 암호화해 보관했습니다." : "이 브라우저에 건강 기록을 만들었습니다.";
   });
 }
 
@@ -321,6 +341,8 @@ function clearSession() {
   state.passphrase = "";
   state.confirmation = "";
   state.restore = null;
+  state.previewApple = null;
+  state.savingPreview = false;
   state.notice = "";
   render();
 }
@@ -350,7 +372,7 @@ function selectDate(date) {
 
 async function persist(records) {
   if (!state.session) return;
-  const checked = parseHealthDocument(JSON.stringify(records));
+  const checked = parseHealthDocument(JSON.stringify(records), HEALTH_LIMITS.vaultBytes);
   const envelope = await sealHealthVault(checked, state.session.key, state.session.salt);
   await writeEnvelope(envelope);
   state.session = { ...state.session, document: checked };
@@ -368,7 +390,7 @@ function save(target) {
 function readBackup(file) {
   if (!file) return;
   action(async () => {
-    if (file.size > MAX_BACKUP_BYTES) throw new Error("백업 파일이 너무 큽니다.");
+    if (file.size > HEALTH_VAULT_FILE_BYTES) throw new Error("백업 파일이 너무 큽니다.");
     state.restore = { envelope: parseHealthVault(await file.text()), name: file.name };
     state.passphrase = "";
     state.confirmation = "";
@@ -404,6 +426,52 @@ function importDocument(file) {
     state.entry = merged.entries.find((item) => item.date === state.entry.date) ?? emptyHealthEntry(state.entry.date);
     state.notice = `기록 ${added}일을 추가했습니다. 같은 날짜의 기존 기록은 유지했습니다.`;
   });
+}
+
+function appleFileButton(id, label, pick) {
+  return fileButton(id, label, "Apple 건강 ZIP 또는 XML 파일 선택",
+    () => state.busy || (state.session && (state.external || entryDirty() || profileDirty())),
+    pick, ".zip,.xml,application/zip,application/xml,text/xml");
+}
+
+function importAppleFile(file) {
+  if (!file) return;
+  action(async () => {
+    state.notice = "Apple 건강 파일을 읽고 있어요…";
+    refresh();
+    const incoming = await readAppleHealth(file);
+    if (!state.session) {
+      state.previewApple = incoming;
+      state.savingPreview = false;
+      state.notice = "";
+      return;
+    }
+    const records = state.session.document;
+    const appleHealth = mergeAppleHealth(records.appleHealth, incoming);
+    const added = appleHealth.records.length - (records.appleHealth?.records.length ?? 0);
+    await persist({ ...records, appleHealth });
+    state.tab = "apple";
+    state.notice = added ? `측정 기록 ${added.toLocaleString("ko-KR")}건을 추가하고 암호화해 보관했습니다.` : "기존 기록과 합쳤습니다. 새로 추가된 측정 기록은 없습니다.";
+  });
+}
+
+function previewView() {
+  return element("section", { class: "health", "aria-label": "Apple 건강 파일 미리보기" },
+    element("div", { class: "preview-toolbar" },
+      element("p", { class: "muted" }, "미리보기 중 · 창을 닫으면 이 파일의 열람이 끝납니다."),
+      element("div", { class: "actions" },
+        button("preview-save", "primary", "내 기록에 보관", () => {
+          state.savingPreview = true;
+          state.error = "";
+          state.notice = "";
+          render();
+        }),
+        button("preview-close", "secondary", "미리보기 닫기", clearSession),
+      ),
+    ),
+    feedback,
+    renderAppleHealth(state.previewApple, appleFileButton("apple-preview-file", "다른 파일 열기", importAppleFile)),
+  );
 }
 
 function lockForm(existing) {
@@ -450,12 +518,13 @@ function lockedView() {
   const { restore, hasVault, external } = state;
   const existing = hasVault || restore !== null;
 
-  return element("section", { class: "card locked", "aria-labelledby": "health-vault-title" },
+  const vault = element("section", { class: "card locked", "aria-labelledby": "health-vault-title" },
     element("span", { class: "lock-icon" }, icon("lock-keyhole", 24)),
     element("div", {},
-      element("p", { class: "eyebrow" }, "개인 건강 기록"),
-      element("h2", { id: "health-vault-title", tabindex: -1 }, existing ? "건강 기록 잠금 해제" : "건강 기록 만들기"),
-      element("p", { class: "muted" }, existing
+      element("h2", { id: "health-vault-title", tabindex: -1 }, state.savingPreview ? "Apple 건강 기록 보관" : existing ? "건강 기록 잠금 해제" : "건강 기록 만들기"),
+      element("p", { class: "muted" }, state.savingPreview
+        ? (existing ? "암호를 입력하면 방금 연 파일을 기존 기록과 합쳐 보관합니다." : "암호를 만들면 방금 연 파일을 이 브라우저에 보관합니다.")
+        : existing
         ? "건강 기록 암호로 이 브라우저의 기록을 엽니다."
         : "건강 기록 전용 암호를 만드세요. 데이터는 이 브라우저에 암호화해 저장합니다."),
     ),
@@ -475,8 +544,30 @@ function lockedView() {
         document.getElementById("vault-backup-file")?.focus();
       }),
       hasVault && button("vault-export", "secondary", "암호화 백업 받기", exportBackup),
+      state.savingPreview && button("preview-back", "secondary", "미리보기로 돌아가기", () => {
+        state.savingPreview = false;
+        state.passphrase = "";
+        state.confirmation = "";
+        state.notice = "";
+        state.error = "";
+        render();
+      }),
     ),
     element("p", { class: "muted" }, "기기를 바꾸거나 브라우저 데이터를 정리할 때는 암호화 백업을 먼저 받아 두세요. 암호를 잊으면 기록을 열 수 없습니다."),
+  );
+  if (state.savingPreview) return vault;
+  return element("div", { class: "welcome-layout" },
+    element("section", { class: "card apple-welcome", "aria-labelledby": "apple-welcome-title" },
+      element("span", { class: "welcome-icon" }, icon("heart-pulse", 32)),
+      element("h2", { id: "apple-welcome-title" }, "Apple 건강 파일 열기"),
+      element("p", {}, "iPad나 iPhone에서 내보낸 건강 기록을 차트로 살펴보세요. 원본 ZIP 또는 XML 파일을 선택하면 바로 열립니다."),
+      appleFileButton("apple-open-file", "건강 파일 선택", importAppleFile),
+      element("details", { class: "export-help" },
+        element("summary", {}, "iPad에서 파일 내보내기"),
+        element("p", {}, "건강 앱의 사이드바에서 요약을 누르고 왼쪽 위 프로필을 여세요. ‘모든 건강 데이터 내보내기’를 누른 뒤 ‘파일에 저장’을 선택하세요."),
+      ),
+    ),
+    vault,
   );
 }
 
@@ -740,22 +831,22 @@ function openView() {
   const age = ageOn(records.profile.birthDate, today);
 
   return element("section", { class: "health", "aria-label": "개인 건강 관리" },
-    element("div", { class: "card overview" },
+    element("div", { class: tab === "apple" ? "vault-toolbar" : "card overview" },
       element("div", { class: "section-head" },
         element("div", {},
-          element("p", { class: "eyebrow" }, icon("shield-check", 15), "이 브라우저에 암호화 저장"),
-          element("h2", { id: "health-overview-title", tabindex: -1 }, "나의 건강 한눈에 보기"),
+          tab !== "apple" && element("p", { class: "eyebrow" }, icon("shield-check", 15), "이 브라우저에 암호화 저장"),
+          element("h2", { id: "health-overview-title", tabindex: -1 }, tab === "apple" ? [icon("shield-check", 17), "암호화된 내 기록"] : "나의 건강 한눈에 보기"),
         ),
         button("health-lock", "secondary", [icon("lock-keyhole", 15), "기록 잠그기"], lock),
       ),
-      element("dl", { class: "metrics" },
+      tab !== "apple" && element("dl", { class: "metrics" },
         metric("user-round", "나이 · 혈액형", display(age, "세"), records.profile.bloodType || "혈액형 미기록"),
         metric("scale", "최근 몸무게", display(weight?.weightKg, " kg"), weight?.date ?? "몸무게를 기록해 보세요"),
         metric("moon", "최근 수면", display(sleep?.sleepHours, "시간"), sleep?.date ?? "수면을 기록해 보세요"),
         metric("heart-pulse", "최근 기분", display(mood?.mood, " / 5"), mood?.date ?? "기분을 기록해 보세요"),
       ),
     ),
-    element("div", { class: "actions", role: "group", "aria-label": "건강 관리 화면 선택" },
+    element("div", { class: "actions health-tabs", role: "group", "aria-label": "건강 관리 화면 선택" },
       tabs.map(({ id, label, icon: iconName }) => element("button", {
         id: `health-tab-${id}`, type: "button", class: `button ${tab === id ? "button-primary" : "button-secondary"}`,
         "aria-pressed": String(tab === id),
@@ -770,7 +861,10 @@ function openView() {
     state.external && element("p", { class: "error", role: "alert" },
       "다른 탭에서 기록이 변경됐습니다. 현재 내용은 암호화 백업으로 받은 뒤 잠금 해제 화면에서 최신 기록을 열 수 있습니다."),
     feedback,
-    tab === "daily" ? dailyTab(history) : tab === "profile" ? profileTab() : visitTab(),
+    tab === "apple" ? [
+      (entryDirty() || profileDirty()) && element("p", { class: "muted" }, "작성 중인 일일 기록이나 기본정보를 저장하면 파일을 추가할 수 있어요."),
+      renderAppleHealth(records.appleHealth, appleFileButton("apple-import-file", records.appleHealth ? "파일 추가" : "건강 파일 선택", importAppleFile)),
+    ] : tab === "daily" ? dailyTab(history) : tab === "profile" ? profileTab() : visitTab(),
     element("section", { class: "card backups", "aria-labelledby": "health-backup-title" },
       element("div", {},
         element("h2", { id: "health-backup-title" }, "기록 보관"),

@@ -1,5 +1,5 @@
 import { assert, test } from "./harness.js";
-import { emptyHealthDocument, emptyHealthEntry, HEALTH_LIMITS } from "../js/health.js";
+import { emptyHealthDocument, emptyHealthEntry, HEALTH_LIMITS, mergeAppleHealth, parseHealthDocument } from "../js/health.js";
 import { createHealthVault, parseHealthVault, sealHealthVault, unlockHealthVault } from "../js/health-vault.js";
 
 const passphrase = "테스트 전용 암호 예시";
@@ -46,10 +46,63 @@ test("rejects invalid envelope versions, field sizes, encodings, and extra field
     { ...envelope, salt: btoa("short") },
     { ...envelope, iv: envelope.iv + "\n" },
     { ...envelope, ciphertext: btoa("too short") },
-    { ...envelope, ciphertext: btoa("x".repeat(HEALTH_LIMITS.fileBytes + 17)) },
+    { ...envelope, ciphertext: btoa("x".repeat(HEALTH_LIMITS.vaultBytes + 17)) },
     { ...envelope, notes: "unexpected plaintext" },
   ];
   for (const invalid of malformed) {
     assert.throws(() => parseHealthVault(JSON.stringify(invalid)));
   }
+});
+
+function appleFixture(records) {
+  return { version: 1, exportedAt: "", profile: {}, records, correlations: [] };
+}
+
+test("merges overlapping Apple exports in either order and retains repeated observations", async () => {
+  const sample = {
+    type: "HKQuantityTypeIdentifierStepCount", unit: "count", value: "7", source: "테스트",
+    start: "2025-02-01 09:00:00 +0900", end: "2025-02-01 09:05:00 +0900",
+  };
+  const first = { ...sample, created: sample.end, metadata: { HKWasUserEntered: "1" } };
+  const second = { ...sample, created: "2025-02-01 09:06:00 +0900" };
+  const full = appleFixture([first, second]);
+  full.profile.HKCharacteristicTypeIdentifierBiologicalSex = "HKBiologicalSexNotSet";
+  full.correlations = [{
+    type: "HKCorrelationTypeIdentifierFood", start: sample.start, end: sample.end,
+    source: sample.source, members: [first],
+  }];
+  const partial = appleFixture([sample, sample]);
+  partial.correlations = [{ ...full.correlations[0], members: [sample] }];
+  // CDA may omit creation dates and metadata for the same observation.
+  for (const combined of [mergeAppleHealth(full, partial), mergeAppleHealth(partial, full)]) {
+    assert.deepEqual(combined, full);
+    assert.deepEqual(mergeAppleHealth(combined, full), full);
+  }
+  const withLaterObservation = mergeAppleHealth(full, appleFixture([{ ...second, created: "2025-02-03 10:00:00 +0900" }]));
+  assert.equal(withLaterObservation.records.length, 3);
+  const mixed = mergeAppleHealth(appleFixture([sample, first]), appleFixture([first, second]));
+  assert.deepEqual(mixed.records, [second, first]);
+  assert.deepEqual(mergeAppleHealth(mixed, partial).records, mixed.records);
+  const document = { ...fixture(), appleHealth: full };
+  const { envelope } = await createHealthVault(document, passphrase);
+  assert.ok(!JSON.stringify(envelope).includes("HKQuantityTypeIdentifier"));
+  const restored = await unlockHealthVault(parseHealthVault(JSON.stringify(envelope)), passphrase);
+  assert.deepEqual(restored.document, document);
+});
+
+test("validates Apple records, metadata, intervals and members before restoring", () => {
+  const row = {
+    type: "HKQuantityTypeIdentifierStepCount", value: "7", unit: "count", source: "테스트",
+    start: "2025-01-03 00:00:00 -0800", end: "2025-01-03 00:00:00 -0800",
+  };
+  for (const changes of [
+    { start: "2025-02-29 00:00:00 -0800" }, { end: "2025-01-02 00:00:00 -0800" },
+    { source: 1 }, { metadata: { field: ["nested"] } }, { value: "NaN" },
+  ]) {
+    const appleHealth = appleFixture([{ ...row, ...changes }]);
+    assert.throws(() => parseHealthDocument(JSON.stringify({ ...fixture(), appleHealth })), /Apple/);
+  }
+  const nested = appleFixture([]);
+  nested.correlations = [{ ...row, members: [null] }];
+  assert.throws(() => mergeAppleHealth(undefined, nested), /Apple/);
 });
